@@ -101,6 +101,32 @@
       - [Flow Overview](#flow-overview-1)
       - [API Requests via the Backend](#api-requests-via-the-backend)
       - [Confidential Client and Security Benefits](#confidential-client-and-security-benefits)
+  - [OpenID Connect](#openid-connect)
+    - [Overview of OpenID Connect](#overview-of-openid-connect)
+      - [ID Token](#id-token)
+      - [Structure of a JSON Web Token (JWT)](#structure-of-a-json-web-token-jwt)
+      - [Payload Properties](#payload-properties)
+      - [User Identifier](#user-identifier)
+    - [Access Tokens vs ID Tokens](#access-tokens-vs-id-tokens)
+      - [Key Differences](#key-differences)
+      - [Access Token Purpose](#access-token-purpose)
+      - [ID Token Purpose](#id-token-purpose)
+      - [Different Audiences](#different-audiences)
+      - [Format Variations](#format-variations)
+    - [Getting an ID Token](#getting-an-id-token)
+      - [Access Token and ID Token Together](#access-token-and-id-token-together)
+      - [Authorization Request with "openid" Scope](#authorization-request-with-openid-scope)
+      - [Using response\_type=id\_token](#using-response_typeid_token)
+      - [Adding User Information to the ID Token](#adding-user-information-to-the-id-token)
+      - [Risks with the Implicit Flow](#risks-with-the-implicit-flow)
+    - [Validating and Using an ID Token](#validating-and-using-an-id-token)
+      - [Importance of Validation](#importance-of-validation)
+      - [Validating the Signature](#validating-the-signature)
+      - [Checking Token Claims](#checking-token-claims)
+      - [Trusted Claims](#trusted-claims)
+      - [Simplified Flow via Authorization Code](#simplified-flow-via-authorization-code)
+      - [Revalidating the ID Token](#revalidating-the-id-token)
+      - [Simplified Approach for Basic Use Cases](#simplified-approach-for-basic-use-cases)
 
 ## Understanding the Differences Between OAuth and OpenID Connect
 
@@ -587,3 +613,139 @@ When the SPA needs to make an API request, it sends the request to the backend a
 #### Confidential Client and Security Benefits
 
 The backend server acts as a confidential client, which means it can use a client secret for additional security. This method is recommended in the OAuth for Browser-Based App specification and is a much safer option for SPAs with dynamic backend support.
+
+## OpenID Connect
+
+### Overview of OpenID Connect
+
+OpenID Connect extends OAuth by adding the ability to share user information with applications. While OAuth focuses on allowing apps to access APIs, OpenID Connect provides a way for applications to learn about users.
+
+#### ID Token
+
+The key addition in OpenID Connect is the ID Token, which allows the authorization server to communicate information about the user who logged in. ID Tokens are always JSON Web Tokens (JWT).
+
+#### Structure of a JSON Web Token (JWT)
+
+A JWT is made up of three parts:
+
+- **Header**: Contains information about the token, such as the algorithm used.
+- **Payload**: Contains user data, such as identifiers and profile information.
+- **Signature**: Used to validate the token.
+
+All three parts are base64 encoded, with the header and payload being encoded JSON data.
+
+#### Payload Properties
+
+Common properties in the payload include:
+
+- **sub**: The user's identifier.
+- **iss**: The server that issued the token.
+- **aud**: The intended audience, usually the client ID.
+- **iat**: The issuance time.
+- **exp**: The expiration time.
+
+The exact contents of the payload can vary depending on the OAuth server.
+
+#### User Identifier
+
+The **sub** property contains the user’s unique identifier, which can be in various formats (e.g., a string of letters and numbers, a username, or an email). This identifier is stable and unique for each user, allowing the application to use it for user management.
+
+### Access Tokens vs ID Tokens
+
+#### Key Differences
+
+Access tokens and ID tokens serve different purposes, even though they may share the same format (JSON Web Token). Access tokens are used by the application to make API requests, while ID tokens are used to learn information about the user.
+
+#### Access Token Purpose
+
+Access tokens allow an application to access an API. The application cannot and should not interpret the token, treating it as an opaque string. This is a design principle of OAuth, similar to a hotel key card that simply works without the user knowing its internal details.
+
+#### ID Token Purpose
+
+ID tokens, on the other hand, are designed to be read by the application. They contain user information, such as claims, and are meant to be unpacked and validated by the application, like checking a passport.
+
+#### Different Audiences
+
+The audience for an access token is the API or resource server, while the audience for an ID token is the application. These tokens have different roles, and their audience property in the JWT will reflect this.
+
+#### Format Variations
+
+Not all OAuth servers use JSON Web Tokens for access tokens. Access tokens can have different formats, and applications should not make assumptions about this. However, ID tokens are always JSON Web Tokens and need to be validated by the application.
+
+### Getting an ID Token
+
+#### Access Token and ID Token Together
+
+Applications often need both access tokens (for API requests) and ID tokens (to identify the user). The easiest way to get an ID token, if already using the authorization code flow, is to add the "openid" scope to the request. This will return both an access token and an ID token.
+
+#### Authorization Request with "openid" Scope
+
+To request an ID token, you add the "openid" scope to a normal authorization request with response_type=code. When the authorization server responds, it returns an access token and an ID token in the same response. This method simplifies ID token handling since the signature doesn’t need validation when received over a trusted back channel.
+
+```code
+https://authorization-server.com/auth?
+        response_type=code&
+        scope=photos+openid&
+        client_id=CLIENT_ID&
+        redirect uri=REDIRECT URI &
+        state=xyz1234&
+        nonce=1029385476&
+        code_challenge=CODE_CHALLENGE&
+        code_challenge_method=S256
+```
+
+#### Using response_type=id_token
+
+Alternatively, you can use response_type=id_token if you only want an ID token without an access token. This method returns the ID token directly in the redirect, similar to the Implicit flow. However, it's crucial to validate the token when using this method to ensure its authenticity.
+
+```code
+{
+"token_type": "Bearer",
+"access_token":"RsT5Ojbz0zqLgV3Ia",
+"expires_in":3600,
+"id_token":"eyJraWQiOiJiRmxZzL2..."
+}
+```
+
+#### Adding User Information to the ID Token
+
+By default, an ID token obtained with just the "openid" scope contains minimal information. If you need more user details like their name or email, you must request additional scopes like "profile" or "email". However, not all servers include this information in the ID token. In some cases, you may need to request user information from a userinfo endpoint using an access token.
+
+#### Risks with the Implicit Flow
+
+Using response_type=id_token in the front channel introduces risks. Even though ID tokens are signed and can be validated, the authorization server doesn’t confirm if the token was successfully received by the application. Sensitive information like email addresses should not be sent in this way, as the front channel is less secure. The back channel via the authorization code flow is a safer option.
+
+### Validating and Using an ID Token
+
+#### Importance of Validation
+
+When receiving an ID token from the OAuth server, especially over the front channel using implicit or hybrid flows, it is crucial to validate the token. Without validation, a malicious actor could inject a bogus ID token, compromising your application's security.
+
+#### Validating the Signature
+
+The first step is to validate the signature of the JSON Web Token (JWT) to ensure that its contents haven't been tampered with. Use a JWT library to check the signature using the correct key, which may be included in the token's header. Verify the signing algorithm and validate the signature using the library.
+
+#### Checking Token Claims
+
+In addition to the signature, you must validate several key claims:
+
+- **Issuer**: Confirm the token comes from your OpenID Connect server.
+- **Audience**: Ensure the token is intended for your application by checking the client ID.
+- **Timestamps**: Validate the `issued_at` and `expires_at` timestamps.
+- **Nonce**: Match the nonce value in the token with the one you set in the request to prevent injection attacks.
+
+#### Trusted Claims
+
+Once validated, you can trust claims such as the user's ID (`subject`), email, or name. Additional claims like `amr` (Authentication Method Reference) may indicate how the user logged in (e.g., with a password or second factor). You can also check when the user last authenticated.
+
+#### Simplified Flow via Authorization Code
+
+If you obtain the ID token through the authorization code flow over the back channel, many of these validation steps (issuer, audience, timestamps, signature) are unnecessary, as the secure HTTPS connection already ensures the token's integrity.
+
+#### Revalidating the ID Token
+
+If you store the ID token (e.g., in a client-side cookie or pass it to another part of your app), you must revalidate it whenever it is used, as it is no longer coming from a trusted source. Validate the signature and claims again to ensure its integrity.
+
+#### Simplified Approach for Basic Use Cases
+
+For simpler use cases like retrieving the user's email or name, you can use the authorization code flow to safely get the ID token from the trusted back channel, avoiding the need for complex validation steps.
