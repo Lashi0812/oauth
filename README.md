@@ -274,10 +274,10 @@ sequenceDiagram
     UserAgent->>App: Request to use app
     App->>UserAgent: Hang on while I generate a new secret and hash it
     Note left of App: Secret is generated <br/>using PKCE!
-    App->>User: Please go to the authorization server to grant me access, take this hash with you
-    User->>AS: I'd like to log in to {app}, here's the hash it gave me
-    AS->>User: Here is a temporary code the app can use
-    User->>App: Here is the temporary code, please use this to get a token
+    App->>UserAgent: Please go to the authorization server to grant me access, take this hash with you
+    UserAgent->>AS: I'd like to log in to {app}, here's the hash it gave me
+    AS->>UserAgent: Here is a temporary code the app can use
+    UserAgent->>App: Here is the temporary code, please use this to get a token
     App->>AS: Here's the code, and the plaintext secret, please give me a token
     AS->>App: Let me verify the hash of that secret... ok here is an access token!
     App->>API: Please let me access this user’s data with this access token!
