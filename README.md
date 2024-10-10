@@ -127,6 +127,26 @@
       - [Simplified Flow via Authorization Code](#simplified-flow-via-authorization-code)
       - [Revalidating the ID Token](#revalidating-the-id-token)
       - [Simplified Approach for Basic Use Cases](#simplified-approach-for-basic-use-cases)
+  - [OAuth for APIs](#oauth-for-apis)
+    - [Shifting focus](#shifting-focus)
+      - [Access Token Format](#access-token-format)
+      - [Key Topics for APIs](#key-topics-for-apis)
+    - [Access Token Options for APIs](#access-token-options-for-apis)
+      - [Types of Access Tokens](#types-of-access-tokens)
+      - [Implementing Reference Tokens](#implementing-reference-tokens)
+      - [Implementing Self-encoded Tokens](#implementing-self-encoded-tokens)
+      - [OAuth Application Perspective](#oauth-application-perspective)
+      - [API Perspective](#api-perspective)
+    - [Advantages and Disadvantages of Reference Tokens](#advantages-and-disadvantages-of-reference-tokens)
+      - [Advantages of Reference Tokens](#advantages-of-reference-tokens)
+      - [Disadvantages of Reference Tokens](#disadvantages-of-reference-tokens)
+      - [Scaling Concerns](#scaling-concerns)
+      - [When to Use Reference Tokens](#when-to-use-reference-tokens)
+    - [Advantages and Disadvantages of Self-Encoded Tokens](#advantages-and-disadvantages-of-self-encoded-tokens)
+      - [Advantages of Self-Encoded Tokens](#advantages-of-self-encoded-tokens)
+      - [Disadvantages of Self-Encoded Tokens](#disadvantages-of-self-encoded-tokens)
+      - [Handling Revocation and Security](#handling-revocation-and-security)
+      - [When to Use Self-Encoded Tokens](#when-to-use-self-encoded-tokens)
 
 ## Understanding the Differences Between OAuth and OpenID Connect
 
@@ -749,3 +769,112 @@ If you store the ID token (e.g., in a client-side cookie or pass it to another p
 #### Simplified Approach for Basic Use Cases
 
 For simpler use cases like retrieving the user's email or name, you can use the authorization code flow to safely get the ID token from the trusted back channel, avoiding the need for complex validation steps.
+
+## OAuth for APIs
+
+### Shifting focus
+
+After covering OAuth from the perspective of applications, it's time to switch gears and focus on APIs. While the first part of the course concentrated on OAuth for applications, this section will address what is important for APIs that use OAuth for protection.
+
+#### Access Token Format
+
+One key difference between applications and APIs is that applications don't care about the format of an access token. However, from the API's perspective, the token format is critical as the API must understand, access, and validate the token (similar to a hotel door knowing how to read a key card).
+
+#### Key Topics for APIs
+
+This section will cover important aspects for API protection using OAuth, including:
+
+- Access token formats
+- Token lifetime trade-offs
+- Defining scopes for your API
+
+Let's dive into these topics!
+
+### Access Token Options for APIs
+
+#### Types of Access Tokens
+
+When building an API, you have two main types of access tokens to choose from:
+
+1. **Reference Tokens**: These are random strings that act as pointers to data stored elsewhere.
+   ![ref](assets/ref.png)
+2. **Self-encoded Tokens**: These contain data within the token itself, often in a structured format like a JSON Web Token (JWT).
+
+#### Implementing Reference Tokens
+
+Reference tokens can be implemented using:
+
+- **Relational databases**: Store the token string alongside details like user ID, token lifetime, and scopes.
+- **Caching systems (e.g., Memcache, Redis)**: The random string becomes the cache key, with associated data stored in the cache.
+
+The key idea is that the token itself doesn’t hold any data; it's a reference to data stored elsewhere.
+
+#### Implementing Self-encoded Tokens
+
+Self-encoded tokens pack data within the token string. Common data includes:
+
+- User ID
+- Application issued to
+- Token expiration and creation time
+- Scopes granted
+- Additional data like the authorization server or last login time
+
+A widely used implementation of self-encoded tokens is **JSON Web Tokens (JWT)**, which standardizes what to include in such tokens.
+
+#### OAuth Application Perspective
+
+Applications interacting with OAuth treat access tokens as opaque strings, meaning they don't need to know what’s inside the token. The focus for apps is that the token works, much like a hotel key card.
+
+#### API Perspective
+
+APIs, on the other hand, need to understand the format and content of access tokens. They care about the distinction between reference tokens and self-encoded tokens to validate and use the token properly.
+
+### Advantages and Disadvantages of Reference Tokens
+
+Reference tokens are random strings that serve as pointers to data stored elsewhere, typically in a database. The token string itself holds no inherent meaning.
+
+#### Advantages of Reference Tokens
+
+- **Simplicity**: Easy to implement and understand. The creation and management of tokens (e.g., revoking tokens) are straightforward.
+- **Data Security**: Sensitive data can be stored separately in a database, protecting it from being exposed to users, applications, or APIs. This ensures that only the authorization server can access the associated data.
+- **Easy Revocation**: Tokens can be easily revoked by deleting records in the database when necessary, such as when a user or application is deleted.
+
+#### Disadvantages of Reference Tokens
+
+- **Storage Requirement**: Reference tokens must be stored, which could become overwhelming depending on the number of users, applications, and token lifetimes.
+- **API Lookup Overhead**: APIs must query the database to validate tokens. This can be manageable in small-scale systems where the OAuth server and API share a database, but it becomes a challenge in larger, distributed systems.
+  
+#### Scaling Concerns
+
+For larger systems:
+
+- **Central Database Dependency**: Scaling to multiple APIs or data centers introduces the burden of querying a central database, which may hinder performance.
+- **HTTP Token Validation**: Token Introspection is an extension that allows APIs to validate tokens over HTTP, but it adds complexity and may not be optimal for highly distributed systems.
+
+#### When to Use Reference Tokens
+
+Reference tokens are ideal for small-scale systems or APIs with built-in OAuth servers. However, they might not be the best choice for large-scale or distributed systems due to the storage and validation limitations.
+
+### Advantages and Disadvantages of Self-Encoded Tokens
+
+Self-encoded tokens contain meaningful, self-contained data, often implemented as JSON Web Tokens (JWT). These tokens can validate themselves without needing external data.
+
+#### Advantages of Self-Encoded Tokens
+
+- **No Storage Needed**: Since the token contains all necessary validation data, there’s no need to store it in a database.
+- **Scalability**: APIs and resource servers can validate tokens independently without shared storage, making them ideal for distributed systems.
+- **Independent Operation**: If using a separate OAuth server (like Okta), APIs can validate tokens directly without needing to query the OAuth server for token validity.
+
+#### Disadvantages of Self-Encoded Tokens
+
+- **Data Visibility**: Data within the JWT is not encrypted; it can be decoded and accessed by anyone with the token, including users and developers.
+- **Revocation Challenges**: Tokens cannot be revoked before they expire. If a token is issued for 24 hours, it remains valid until it naturally expires, even if a user or application is deleted.
+
+#### Handling Revocation and Security
+
+- **State Maintenance**: Services like Okta maintain token state (revoked or active) independently of the JWT, allowing for proper revocation through network queries.
+- **Token Introspection**: APIs can use token introspection to check token validity, but they must communicate with the authorization server for the most accurate status.
+
+#### When to Use Self-Encoded Tokens
+
+Self-encoded tokens, especially JSON Web Tokens, are well-suited for larger-scale APIs and systems that utilize a separate OAuth server. The benefits often outweigh the drawbacks, making them a popular choice in many authorization scenarios. Future lessons will address strategies for managing token revocation and related challenges.
