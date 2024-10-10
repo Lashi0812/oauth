@@ -81,6 +81,26 @@
       - [Using the Refresh Token](#using-the-refresh-token)
       - [Security and Best Practices](#security-and-best-practices)
       - [Example Workflow](#example-workflow)
+  - [Single-Page Apps (SPAs)](#single-page-apps-spas)
+    - [OAuth Challenges in Single-Page Apps (SPAs)](#oauth-challenges-in-single-page-apps-spas)
+      - [Browser Environment and Public Clients](#browser-environment-and-public-clients)
+      - [Cross-Site Scripting (XSS) Attacks](#cross-site-scripting-xss-attacks)
+      - [Risks from Browser Extensions](#risks-from-browser-extensions)
+      - [Lack of Secure Storage in Browsers](#lack-of-secure-storage-in-browsers)
+      - [Server-Side Protections for SPAs](#server-side-protections-for-spas)
+    - [Token Protection in Single-Page Apps (SPAs)](#token-protection-in-single-page-apps-spas)
+      - [PKCE for Secure OAuth Flow](#pkce-for-secure-oauth-flow)
+      - [Risks of Cross-Site Scripting (XSS) Attacks](#risks-of-cross-site-scripting-xss-attacks)
+      - [Storage Options for Tokens](#storage-options-for-tokens)
+      - [Risks from External Scripts](#risks-from-external-scripts)
+      - [Alternatives to Storing Tokens in JavaScript](#alternatives-to-storing-tokens-in-javascript)
+      - [WebCrypto API as a Partial Solution](#webcrypto-api-as-a-partial-solution)
+    - [Securing Tokens by Keeping Them Out of JavaScript](#securing-tokens-by-keeping-them-out-of-javascript)
+      - [Risks of JavaScript Token Access](#risks-of-javascript-token-access)
+      - [Backend for OAuth Flow and API Requests](#backend-for-oauth-flow-and-api-requests)
+      - [Flow Overview](#flow-overview-1)
+      - [API Requests via the Backend](#api-requests-via-the-backend)
+      - [Confidential Client and Security Benefits](#confidential-client-and-security-benefits)
 
 ## Understanding the Differences Between OAuth and OpenID Connect
 
@@ -485,3 +505,85 @@ Although the lack of a client secret can make refresh tokens a security risk, mo
 3. The refresh token is stored securely on the device using a secure storage API.
 4. When the access token expires, the app uses the refresh token to get a new access token, sometimes requiring biometric authentication (e.g., FaceID) to unlock the secure storage.
 5. The user experience remains smooth as the app avoids prompting for a password, relying instead on biometric verification.
+
+## Single-Page Apps (SPAs)
+
+### OAuth Challenges in Single-Page Apps (SPAs)
+
+#### Browser Environment and Public Clients
+
+Single-page apps (SPAs) run in the browser, which brings unique challenges. Since JavaScript apps are considered public clients, there’s no way to include API keys or client secrets securely. Even if you try to hide them, users can easily access them by viewing the source code. Without a client secret, OAuth flows like PKCE (Proof Key for Code Exchange) are used for secure communication.
+
+#### Cross-Site Scripting (XSS) Attacks
+
+Browsers are vulnerable to cross-site scripting (XSS) attacks, where attackers can run malicious code that looks like legitimate app code. If successful, attackers can access sensitive data such as access tokens or user information. One of the best defenses is a strong Content Security Policy (CSP), which controls what JavaScript can be loaded and from which domains. However, this can be tricky to balance with the need for third-party scripts (e.g., for analytics or advertising), which also pose potential security risks.
+
+#### Risks from Browser Extensions
+
+Users may have installed browser extensions that have access to the app’s page, adding another layer of uncertainty. Even if the app uses a strict CSP and avoids third-party JavaScript, browser extensions can still inject code into the page, potentially compromising the app’s security.
+
+#### Lack of Secure Storage in Browsers
+
+Browsers lack secure storage options, which is another challenge when dealing with access or refresh tokens. Since JavaScript can access cookies, LocalStorage, or SessionStorage, any JavaScript running on the page (including malicious code via XSS) could potentially access these tokens. This limitation makes it difficult to store sensitive information securely in SPAs.
+
+#### Server-Side Protections for SPAs
+
+Because of the inherent risks in the browser environment, OAuth servers often have stricter policies for SPAs. For example, refresh tokens might be disabled or limited to one-time use, and access tokens might have shorter lifetimes to reduce the impact of token leaks.
+
+### Token Protection in Single-Page Apps (SPAs)
+
+#### PKCE for Secure OAuth Flow
+
+The most secure OAuth flow for SPAs is the authorization code flow with PKCE, which ensures that only the app initiating the flow can complete it and receive the token. However, once the token is granted, securely storing it in the browser becomes a challenge due to the inherent risks of the browser environment.
+
+#### Risks of Cross-Site Scripting (XSS) Attacks
+
+Browsers are prone to XSS attacks, where attackers can run malicious code in your app, potentially accessing stored tokens. Any data stored in accessible locations (e.g., LocalStorage, SessionStorage, or cookies) is at risk if an attacker can execute JavaScript on your page.
+
+#### Storage Options for Tokens
+
+- **LocalStorage**: Persists data across sessions and tabs, but is vulnerable to XSS attacks as any script on the page can access it.
+- **SessionStorage**: Stores data only for the duration of the window session and does not share data across tabs, but is also susceptible to XSS.
+- **Cookies**: Although commonly used for backend communication, they can be accessed by JavaScript, making them similarly vulnerable.
+
+#### Risks from External Scripts
+
+Even if your app does not directly have a cross-site scripting vulnerability, external scripts or libraries you load (e.g., analytics or ads) can access your storage, further increasing security risks.
+
+#### Alternatives to Storing Tokens in JavaScript
+
+- **In-Memory Storage**: Storing tokens in memory avoids the risks associated with LocalStorage and SessionStorage, but tokens are lost when the page is refreshed or a new tab is opened.
+- **Service Worker**: Service workers can store tokens in an isolated context, protecting them from XSS attacks. However, this method is more complex to implement, does not work in IE11, and requires all API requests to go through the service worker, which acts as an OAuth client.
+  
+#### WebCrypto API as a Partial Solution
+
+The WebCrypto API allows JavaScript to generate and use private keys without exposing them, enabling encrypted token storage. However, this API is not supported in IE or Safari, and while it improves security, attackers could still use the private key to decrypt the storage.
+
+### Securing Tokens by Keeping Them Out of JavaScript
+
+#### Risks of JavaScript Token Access
+
+Storing tokens in JavaScript makes them vulnerable to cross-site scripting (XSS) attacks. To avoid this risk, a more secure approach is to move the OAuth flow and token storage to a dynamic backend server, ensuring that tokens are not accessible to JavaScript.
+
+#### Backend for OAuth Flow and API Requests
+
+![spa](assets/SPA.png)
+
+In this model, the OAuth flow is handled by a backend server rather than the frontend JavaScript. This setup is suitable if your single-page app (SPA) is served from a dynamic backend like .NET or Java, but not if you're using pure static hosting like Amazon S3.
+
+#### Flow Overview
+
+- The browser loads the SPA.
+- When the OAuth flow starts, the user is redirected to the authorization server to log in.
+- The authorization server redirects the user back to the SPA with an authorization code.
+- The SPA sends this code to its backend server.
+- The backend server exchanges the code for an access token via a secure back channel.
+- The backend stores the access token and sets an HTTPOnly session cookie in the browser, ensuring that the token can't be stolen by JavaScript.
+
+#### API Requests via the Backend
+
+When the SPA needs to make an API request, it sends the request to the backend along with the session cookie. The backend uses the stored access token to make the API call, keeping the token entirely out of the browser.
+
+#### Confidential Client and Security Benefits
+
+The backend server acts as a confidential client, which means it can use a client secret for additional security. This method is recommended in the OAuth for Browser-Based App specification and is a much safer option for SPAs with dynamic backend support.
