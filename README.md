@@ -51,6 +51,36 @@
     - [Step-by-Step Flow with Parameters](#step-by-step-flow-with-parameters)
     - [Handling Errors and Refresh Tokens](#handling-errors-and-refresh-tokens)
     - [Best Practices and PKCE Adoption](#best-practices-and-pkce-adoption)
+  - [Mobile Apps](#mobile-apps)
+    - [Mobile Apps in OAuth Authorization](#mobile-apps-in-oauth-authorization)
+      - [Client Secret Issues in Mobile Apps](#client-secret-issues-in-mobile-apps)
+      - [Solution for Mobile Apps](#solution-for-mobile-apps)
+    - [Redirect URLs in Mobile OAuth Flow](#redirect-urls-in-mobile-oauth-flow)
+      - [Redirect URLs in Web Apps](#redirect-urls-in-web-apps)
+      - [Challenges in Mobile Apps](#challenges-in-mobile-apps)
+      - [Custom URL Schemes](#custom-url-schemes)
+      - [Deep Linking (App-Claimed URL Patterns)](#deep-linking-app-claimed-url-patterns)
+      - [Importance of PKCE](#importance-of-pkce)
+    - [OAuth in Mobile Apps: Browser Launch](#oauth-in-mobile-apps-browser-launch)
+      - [Early Mobile OAuth Flow Challenges](#early-mobile-oauth-flow-challenges)
+      - [Use of Embedded Web Views](#use-of-embedded-web-views)
+      - [Modern APIs for Secure OAuth Flow](#modern-apis-for-secure-oauth-flow)
+    - [Authorization Code Flow for Native and Mobile Applications](#authorization-code-flow-for-native-and-mobile-applications)
+      - [Native Apps and Client Secrets](#native-apps-and-client-secrets)
+      - [Flow Overview](#flow-overview)
+      - [Step-by-Step Process](#step-by-step-process)
+      - [PKCE (Proof Key for Code Exchange)](#pkce-proof-key-for-code-exchange-1)
+      - [Building the Request](#building-the-request)
+      - [OAuth and Mobile Browsers](#oauth-and-mobile-browsers)
+      - [Handling Errors and Success](#handling-errors-and-success)
+      - [Final Exchange](#final-exchange)
+    - [Overview of Using Refresh Tokens in Mobile Apps](#overview-of-using-refresh-tokens-in-mobile-apps)
+      - [What Are Refresh Tokens?](#what-are-refresh-tokens)
+      - [Why Are Refresh Tokens Important for Mobile Apps?](#why-are-refresh-tokens-important-for-mobile-apps)
+      - [How to Request a Refresh Token](#how-to-request-a-refresh-token)
+      - [Using the Refresh Token](#using-the-refresh-token)
+      - [Security and Best Practices](#security-and-best-practices)
+      - [Example Workflow](#example-workflow)
 
 ## Understanding the Differences Between OAuth and OpenID Connect
 
@@ -285,8 +315,36 @@ sequenceDiagram
 
 1. **Generate Code Verifier and Challenge**: The app generates a random string (code verifier) and hashes it using SHA256 to create the Code Challenge.
 2. **Build Authorization URL**: Add parameters like `response_type=code`, client ID, redirect URL, scope, and Code Challenge to the authorization endpoint URL.
+
+    ```code
+    https://authorization-server.com/auth?
+            response_type=code&
+            client id=CLIENT ID&
+            redirect_uri=REDIRECT_URI &
+            scope=photos&
+            state=XXXXXXX &
+            code_challenge=XXXXXXXXXXXXX&
+            code_challenge_method=S256
+    ```
+
 3. **User Authentication**: The user logs in and approves the request. If successful, the OAuth server returns the authorization code.
+
+    ```code
+    https://example-app.com/redirect?code=AUTH_CODE_HERE&state=XXXXXXX
+    ```
+
 4. **Token Exchange**: The app exchanges the authorization code for an access token by making a back channel POST request to the token endpoint. The request includes the client credentials and Code Verifier.
+
+    ```code
+    POST https://authorization-server.com/token
+            grant_type=authorization_code&
+            code=AUTH CODE HERE &
+            redirect_uri=REDIRECT_URI &
+            code_verifier-VERIFIER_STRING&
+            client_id=CLIENT_ID&
+            client_secret=CLIENT_SECRET
+    ```
+
 5. **Access Token Usage**: The app uses the access token to make API requests. If a refresh token is received, it can be used to get a new access token when the current one expires.
 
 ### Handling Errors and Refresh Tokens
@@ -297,3 +355,133 @@ sequenceDiagram
 ### Best Practices and PKCE Adoption
 
 PKCE is now part of OAuth 2.1 Security Best Practices and is recommended for all apps to defend against code injection attacks. While some servers may not support PKCE yet, it can still be implemented in your OAuth clients to future-proof the application.
+
+## Mobile Apps
+
+### Mobile Apps in OAuth Authorization
+
+We'll explore how OAuth authorization differs in mobile apps compared to web server apps. While the authorization code flow works similarly in both environments, there are unique challenges specific to mobile apps.
+
+#### Client Secret Issues in Mobile Apps
+
+Unlike web apps, it is unsafe to include client secrets in mobile apps. Including a client secret in the source code, compiling it, and distributing it via an App Store makes the secret accessible to everyone. Tools can easily decompile app binaries, exposing the client secret, which defeats its purpose.
+
+#### Solution for Mobile Apps
+
+To address this, mobile apps simply do not use a client secret. Instead, they rely on other security measures to ensure safe OAuth flows. This is one of several differences in how mobile apps handle OAuth, which will be covered in the following lessons.
+
+### Redirect URLs in Mobile OAuth Flow
+
+One unique aspect of mobile app security in OAuth flows is how platforms like iOS and Android handle redirect URLs, which direct the user back to the app after authorization. This differs from web apps, where the entire interaction occurs securely within a browser.
+
+#### Redirect URLs in Web Apps
+
+In web apps, the OAuth flow takes place within a browser, and the browser's security mechanisms (such as DNS checks and HTTPS validation) ensure a relatively secure process. The authorization server sends a redirect back to the application via the same browser tab, making it secure.
+
+#### Challenges in Mobile Apps
+
+In mobile apps, the flow starts in the app, which launches an in-app browser to communicate with the authorization server. When the authorization server sends the redirect back, it can be intercepted by other apps, leading to security concerns. This is because mobile apps lack the same built-in protections as web browsers.
+
+#### Custom URL Schemes
+
+Initially, mobile apps could define custom URL schemes (e.g., todo://), where any app matching that scheme would launch. However, there was no registration process for these schemes, meaning competing apps could claim the same URL and intercept redirects. This opens up the possibility of apps stealing authorization codes.
+
+#### Deep Linking (App-Claimed URL Patterns)
+
+Modern apps use deep linking, where developers can claim specific URL patterns, including domain names and paths. These claims are more secure since developers must prove ownership of the domain, providing an extra layer of security. However, deep linking still has limitations and can fail under certain conditions.
+
+#### Importance of PKCE
+
+Given the security risks with redirect URLs in mobile apps, the Proof Key for Code Exchange (PKCE) protocol is critical. PKCE helps protect the OAuth flow by ensuring the authorization code is securely exchanged, even if the redirect is intercepted. Therefore, using app-claimed URL patterns along with PKCE is recommended for mobile apps.
+
+### OAuth in Mobile Apps: Browser Launch
+
+#### Early Mobile OAuth Flow Challenges
+
+Initially, mobile apps launching a browser for OAuth caused a poor user experience. Users were forced to leave the app and switch to Safari (iOS) or Chrome (Android) to log in, making the flow less seamless and fragile.
+
+#### Use of Embedded Web Views
+
+Many mobile apps tried to improve user experience by embedding a web view within the app. However, this introduced several security problems:
+
+- **Lack of Address Bar:** Users couldn’t verify if they were on the real authorization server, making them vulnerable to phishing attacks.
+- **Cookie Isolation:** Web views do not share cookies with the system browser, forcing users to re-enter login details even if already logged in elsewhere.
+- **App Control Over Web View:** Apps could potentially access and extract passwords typed in the web view, defeating the purpose of OAuth’s security model.
+
+#### Modern APIs for Secure OAuth Flow
+
+To improve both user experience and security, mobile platforms developed special APIs:
+
+- **SFSafariViewController (iOS)** and **Chrome Custom Tabs (Android):** These APIs allow browsers to be securely launched within the app, without letting the app access the browser contents.
+  - Users don’t leave the app but still benefit from system-level security, such as shared cookies.
+  - This setup ensures users don’t have to re-enter passwords if already logged into the system browser, providing both security and convenience.
+
+### Authorization Code Flow for Native and Mobile Applications
+
+We walks through a complete authorization code flow for native and mobile applications. A sample URL is used instead of a real server, but differences with real OAuth servers are discussed. At the end, you can try it out with a real OAuth server.
+
+#### Native Apps and Client Secrets
+
+When building a native app, you cannot deploy credentials if the app is distributed through an app store. Therefore, OAuth servers don’t provide a client secret for native apps, and you'll perform the flow using only a client ID.
+
+#### Flow Overview
+
+The app running on a mobile device needs an access token to make API requests. The goal is to deliver the token from the OAuth server to the app through a backchannel, while utilizing the browser for user login.
+
+#### Step-by-Step Process
+
+1. **PKCE Code Verifier and Code Challenge**: The app generates a random string called the PKCE Code Verifier and calculates its hash (code challenge), which it includes in the request to the OAuth server.
+2. **Front Channel Request**: The app sends the login request to the OAuth server through the browser. The request includes the client ID, redirect URL, and scope.
+3. **User Login**: The user logs into the OAuth server, which may share cookies with the system, allowing automatic login.
+4. **Authorization Code Returned**: The OAuth server sends the authorization code back to the app via the browser.
+5. **Backchannel Request**: The app exchanges the authorization code for an access token by making a backchannel request to the OAuth server, sending the PKCE code verifier.
+
+#### PKCE (Proof Key for Code Exchange)
+
+PKCE is a security extension for protecting the authorization code flow, especially for mobile apps without client secrets. It ensures that the same entity requesting the authorization code is redeeming it.
+
+#### Building the Request
+
+Before sending the user to the OAuth server, the app generates a code verifier, calculates its hash, and sends the request to the server. This request includes parameters such as the response type, client ID, redirect URL, scope, and code challenge.
+
+#### OAuth and Mobile Browsers
+
+Mobile apps use special in-app browsers (SFSafariViewController on iOS and Chrome Custom Tabs on Android) for OAuth requests. These browsers isolate the app from seeing sensitive information.
+
+#### Handling Errors and Success
+
+After the user logs in, the OAuth server either returns an authorization code or an error to the app’s redirect URL. The app checks the state value for validation and exchanges the authorization code for an access token.
+
+#### Final Exchange
+
+The app makes a POST request to the OAuth server’s token endpoint, sending the authorization code, redirect URL, and code verifier. Upon successful exchange, the server responds with an access token, expiration time, and possibly a refresh token.
+
+### Overview of Using Refresh Tokens in Mobile Apps
+
+#### What Are Refresh Tokens?
+
+Refresh tokens are special tokens used to get new access tokens without user involvement. This helps keep the user logged in while allowing access tokens to have shorter lifespans. For example, access tokens could last just an hour, but the app can use refresh tokens in the background to request new access tokens without interrupting the user.
+
+#### Why Are Refresh Tokens Important for Mobile Apps?
+
+For mobile apps, getting the user to interact with the OAuth server can mean popping up an in-app browser, which interrupts the user. Refresh tokens allow the app to get new access tokens without showing a browser window, improving the user experience.
+
+#### How to Request a Refresh Token
+
+Different servers may handle refresh tokens differently. Some require the app to explicitly request a refresh token by including the scope `offline_access` in the authorization request. However, the server ultimately decides whether the app gets a refresh token, and it may have policies determining which apps or users are eligible.
+
+#### Using the Refresh Token
+
+Once the app receives the refresh token (along with the access token), it can use it to request new access tokens when needed. This is done through a simple POST request to the OAuth server’s token endpoint, with the refresh token, the grant type `refresh_token`, and the app’s client ID. Since native apps don’t have client secrets, protecting the refresh token is critical.
+
+#### Security and Best Practices
+
+Although the lack of a client secret can make refresh tokens a security risk, mobile platforms provide mechanisms to protect them, such as secure storage APIs. Apps should take advantage of these features to store refresh tokens securely.
+
+#### Example Workflow
+
+1. The app initially has no tokens and prompts the user to sign in.
+2. Upon signing in, the app receives both an access token and a refresh token.
+3. The refresh token is stored securely on the device using a secure storage API.
+4. When the access token expires, the app uses the refresh token to get a new access token, sometimes requiring biometric authentication (e.g., FaceID) to unlock the secure storage.
+5. The user experience remains smooth as the app avoids prompting for a password, relying instead on biometric verification.
