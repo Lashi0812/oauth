@@ -147,6 +147,11 @@
       - [Disadvantages of Self-Encoded Tokens](#disadvantages-of-self-encoded-tokens)
       - [Handling Revocation and Security](#handling-revocation-and-security)
       - [When to Use Self-Encoded Tokens](#when-to-use-self-encoded-tokens)
+    - [Using JSON Web Tokens as Access Tokens](#using-json-web-tokens-as-access-tokens)
+      - [JSON Web Token Structure](#json-web-token-structure)
+      - [Claims in JSON Web Tokens](#claims-in-json-web-tokens)
+      - [Optional Claims](#optional-claims)
+      - [Custom Claims](#custom-claims)
 
 ## Understanding the Differences Between OAuth and OpenID Connect
 
@@ -878,3 +883,44 @@ Self-encoded tokens contain meaningful, self-contained data, often implemented a
 #### When to Use Self-Encoded Tokens
 
 Self-encoded tokens, especially JSON Web Tokens, are well-suited for larger-scale APIs and systems that utilize a separate OAuth server. The benefits often outweigh the drawbacks, making them a popular choice in many authorization scenarios. Future lessons will address strategies for managing token revocation and related challenges.
+
+### Using JSON Web Tokens as Access Tokens
+
+Access tokens are essential in OAuth implementations, with self-encoded tokens being one of the two main types. JSON Web Tokens (JWT) are the most common form of self-encoded tokens.
+
+#### JSON Web Token Structure
+
+```code
+eyJraWQiOiJvQlJjR3RxVDhRV2tJR0MyVXpmcEZUczVqSkdnM00zSTNOMHgtZDJhSFNNIiwiYWxnIj oiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULKp3eVRTCTlqNDU0bDNTNmRTM1VTV1hMVVpwekdKd WNSd1ZEbFZCNWNIC3cuVVM1V1NGYVFiQllUMC9GM2tjMG8vK1ZUY3VZZzdwVnZqZXZTT3hkUHhCMD0 iLCJpc3MiOiJodHRwczovL2Rldi0zOTYzNDMub2t0YXByZXZpZXcuY29tL29hdXRoMi9kZWZhdWx0I iwiYXVkIjoiYXBpOi8vZGVmYXVsdCIsImlhdCI6MTU0MzgwMzAyNSwiZXhwIjoxNTQzODA2NjI1LCJ jaWQiOiIwb2FoenBwM3RjcEZyZmNXSTBONyIsInVpZCI6IjAwdWkwZmpraWV5TDQ2bWEWMGg3Iiwic 2NwIjpbIm9mZmxpbmVfYWNjZXNzIiwicGhvdG8iXSwic3ViIjoiaW5xdWlzaXRpdmUtYWxiYXRyb3N zQGV4YW1wbGUuY29tIn0.ncVkzcc6qrFJSXE3-5UsRukHvbwIMKYL3PFaMwReYTquPACOQ8t93xF0 bxbS8wrP0udCDvk6eYq4VbjoFdD59Yy6ltz0OKQ13g8uFg2RwqTBMOKR0mYtQH0RCr9ORhSsmKolaD Dt4TcRX78ZOAyhZ_Qg_UcEoHM4uZikpzBJYPYKbCCfbx-6FzYyHuvevSFzURISYpSHv3nbzirkEzKb Ov7eZlglcCYBdUoGuVBskyHxfMxFpoKQU3mwIFd1QJR8LZ8hA_5ZdYjjMeSXfjnhlP2rppJiHylNre GXXCUSUA74V2t_keY44deTrnPgoFOSe9IchWqcj6sDMDutC4ag
+```
+
+A JWT consists of three base64-encoded parts separated by dots:
+
+1. **Header**: Contains metadata, such as the signing algorithm.
+2. **Payload**: Holds the claims or data relevant to the token.
+3. **Signature**: Ensures the token's integrity but does not encrypt the data.
+
+#### Claims in JSON Web Tokens
+
+The JWT specification allows for various claims, but OAuth servers often use a combination of standard and custom claims. The claims defined in the JSON Web Token Profile for OAuth 2.0 Access Tokens include:
+
+- **iss (Issuer)**: Identifies the token issuer, usually the OAuth server's base URL.
+- **exp (Expiration)**: Specifies when the token expires; it cannot be unlimited.
+- **iat (Issued At)**: The timestamp when the token was issued.
+- **aud (Audience)**: Identifies the intended recipient of the token.
+- **sub (Subject)**: Represents the user or entity associated with the token.
+- **client_id**: The identifier of the application that received the token.
+- **jti (JWT ID)**: A unique identifier for the token, useful for tracking usage.
+
+#### Optional Claims
+
+Optional claims may include:
+
+- **scope**: Details the scope under which the token was issued.
+- **auth_time**: Indicates the last time the user authenticated, allowing APIs to enforce re-authentication based on time.
+- **acr (Authentication Context Class Reference)**: Indicates the authentication method used.
+- **amr (Authentication Methods Reference)**: Lists the methods used for user authentication.
+
+#### Custom Claims
+
+OAuth servers can include additional custom claims based on their policies, such as user groups or additional user information.
